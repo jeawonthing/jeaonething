@@ -447,7 +447,7 @@ if(!GEMINI_API_KEY){
   GEMINI_API_KEY = prompt('Gemini API 키를 입력하세요\n(한 번 입력하면 이 기기에 저장됩니다)') || '';
   if(GEMINI_API_KEY) localStorage.setItem('GEMINI_KEY', GEMINI_API_KEY);
 }
-const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${GEMINI_API_KEY}`;
 
 // ── 사용자 페르소나 (AI 정렬 컨텍스트) ──
 const USER_PERSONA = `사용자: 유튜버 최재원 (삼남래 팀 리더)
@@ -1008,12 +1008,14 @@ alignScore: 1~5 (목표 연결성)
     if(!res.ok) throw new Error(`HTTP ${res.status}`);
     const data=await res.json();
     const raw=data.candidates?.[0]?.content?.parts?.[0]?.text||'';
-    const start=raw.indexOf('{'),end=raw.lastIndexOf('}');
-    if(start===-1||end===-1||start>=end){
-      toast('AI 응답 형식이 올바르지 않습니다. 다시 시도해 주세요.');
+    const jsonMatch = raw.match(/\{[\s\S]*\}/);
+    
+    if (!jsonMatch) {
+      toast('AI 응답에서 데이터 형식을 찾을 수 없습니다.');
       throw new Error('JSON not found in response');
     }
-    const clean=raw.substring(start,end+1);
+    
+    const clean = jsonMatch[0];
     let parsed;
     try{parsed=JSON.parse(clean);}
     catch(parseErr){toast('AI 응답 형식이 올바르지 않습니다. 다시 시도해 주세요.');throw parseErr;}
