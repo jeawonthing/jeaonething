@@ -163,11 +163,22 @@ section{padding:0 16px;margin-top:18px}
 .todo-edit-btn:hover{color:var(--acc)}
 .todo-del:hover{color:var(--acc2)}
 .todo-edit-inp{width:100%;background:var(--surf2);border:1px solid var(--acc);border-radius:6px;color:var(--txt);font-family:'Noto Sans KR',sans-serif;font-size:14px;font-weight:500;padding:5px 8px;outline:none;margin-top:3px;resize:none}
-/* 마감일 입력 */
+/* 마감일 입력 개선 */
 .due-inp-wrap{display:flex;align-items:center;gap:6px;margin-top:5px}
 .due-inp{background:var(--surf2);border:1px solid var(--bord);border-radius:6px;color:var(--txt3);font-family:'Space Mono',monospace;font-size:10px;padding:3px 7px;outline:none;cursor:pointer}
 .due-inp:focus{border-color:var(--acc2);color:var(--txt)}
 .due-clear{background:none;border:none;color:var(--txt3);font-size:11px;cursor:pointer;padding:0 2px}
+/* 마감일 입력 모드 탭 */
+.due-mode-row{display:flex;gap:4px;margin-bottom:4px}
+.due-mode-btn{padding:3px 10px;border-radius:6px;border:1px solid var(--bord);background:transparent;font-family:'Space Mono',monospace;font-size:9px;color:var(--txt3);cursor:pointer;transition:all .15s}
+.due-mode-btn.active{background:rgba(255,106,106,.15);border-color:var(--acc2);color:var(--acc2)}
+.due-manual-wrap{display:flex;gap:4px;align-items:center}
+.due-month-inp,.due-day-inp{background:var(--surf);border:1px solid var(--bord);border-radius:6px;color:var(--txt);font-family:'Space Mono',monospace;font-size:12px;padding:5px 8px;outline:none;text-align:center}
+.due-month-inp{width:50px}
+.due-month-inp:focus,.due-day-inp:focus{border-color:var(--acc2)}
+.due-day-inp{width:44px}
+.due-sep{color:var(--txt3);font-size:12px}
+.due-year-fixed{font-family:'Space Mono',monospace;font-size:11px;color:var(--txt3);padding:5px 4px}
 .ai-sort-btn{display:flex;align-items:center;gap:6px;background:transparent;border:1px solid #2a2a3a;border-radius:8px;padding:8px 12px;font-family:'Noto Sans KR',sans-serif;font-size:11px;color:#444460;cursor:pointer;transition:all .2s;width:100%;justify-content:center}
 .ai-sort-btn:hover{border-color:#3a3a55;color:#7070a0}
 .ai-sort-btn.loading{color:var(--acc);border-color:var(--acc)}
@@ -341,7 +352,27 @@ section{padding:0 16px;margin-top:18px}
           </div>
           <div class="todo-add-row">
             <label>마감</label>
-            <input class="todo-due-inp" id="new-todo-due" type="date" placeholder="마감일 (선택)">
+            <div style="flex:1">
+              <div class="due-mode-row">
+                <button class="due-mode-btn active" id="due-mode-cal" onclick="setDueMode('cal')">📅 달력</button>
+                <button class="due-mode-btn" id="due-mode-manual" onclick="setDueMode('manual')">✏️ 수동</button>
+                <button class="due-clear" id="due-clear-btn" onclick="clearNewDue()" style="margin-left:auto;opacity:.5">✕ 초기화</button>
+              </div>
+              <!-- 달력 모드 -->
+              <div id="due-cal-wrap">
+                <input class="todo-due-inp" id="new-todo-due-cal" type="date" style="width:100%">
+              </div>
+              <!-- 수동 모드 -->
+              <div id="due-manual-wrap" style="display:none">
+                <div class="due-manual-wrap">
+                  <span class="due-year-fixed" id="due-year-label"></span>
+                  <span class="due-sep">/</span>
+                  <input class="due-month-inp" id="due-manual-month" type="number" min="1" max="12" placeholder="MM">
+                  <span class="due-sep">/</span>
+                  <input class="due-day-inp" id="due-manual-day" type="number" min="1" max="31" placeholder="DD">
+                </div>
+              </div>
+            </div>
           </div>
           <div class="add-row" style="margin-top:0">
             <input class="add-inp" id="add-inp" placeholder="할 일 입력..." onkeydown="if(event.key==='Enter')addTodo()">
@@ -425,7 +456,8 @@ let isSaving=false,pendingSave=false;
 function setSyncStatus(s){const d=document.getElementById('sync-dot');d.className='sync-indicator '+s;}
 
 async function save(){
-  try{localStorage.setItem('onesys_backup',JSON.stringify(S));}catch(e){}
+  // 로컬 백업 — 타임스탬프 포함
+  try{localStorage.setItem('onesys_backup',JSON.stringify({...S,_localTs:Date.now()}));}catch(e){}
   if(isSaving){pendingSave=true;return;}
   isSaving=true;setSyncStatus('syncing');
   try{
@@ -445,12 +477,20 @@ function startSync(){
 async function loadFromFirestore(){
   try{
     const snap=await getDoc(docRef);
-    if(snap.exists())S={...S,...snap.data()};
-    else await setDoc(docRef,S);
+    if(snap.exists()){
+      S={...S,...snap.data()};
+    } else {
+      // Firebase에 없으면 로컬 백업 확인 후 업로드
+      const b=localStorage.getItem('onesys_backup');
+      if(b){const local=JSON.parse(b);delete local._localTs;S={...S,...local};}
+      await setDoc(docRef,S);
+    }
   }catch(e){
+    // 오프라인 — 로컬 백업 사용 (Firebase가 진실 공급원이므로 임시)
     const b=localStorage.getItem('onesys_backup');
-    if(b)S={...S,...JSON.parse(b)};
+    if(b){const local=JSON.parse(b);delete local._localTs;S={...S,...local};}
     setSyncStatus('err');
+    toast('오프라인 모드 — 로컬 데이터를 사용합니다');
   }
 }
 
@@ -684,12 +724,43 @@ function saveCat(){
   if(!S.categories)S.categories=[];S.categories.push(val);addCat=val;save();closeModal('cat-modal');renderCatTags();toast(`'${val}' 추가됨`);
 }
 
+let dueMode='cal'; // 'cal' | 'manual'
+function setDueMode(mode){
+  dueMode=mode;
+  document.getElementById('due-mode-cal').classList.toggle('active',mode==='cal');
+  document.getElementById('due-mode-manual').classList.toggle('active',mode==='manual');
+  document.getElementById('due-cal-wrap').style.display=mode==='cal'?'':'none';
+  document.getElementById('due-manual-wrap').style.display=mode==='manual'?'':'none';
+}
+function clearNewDue(){
+  document.getElementById('new-todo-due-cal').value='';
+  document.getElementById('due-manual-month').value='';
+  document.getElementById('due-manual-day').value='';
+}
+function getNewDueValue(){
+  const year=new Date().getFullYear();
+  if(dueMode==='cal'){
+    return document.getElementById('new-todo-due-cal').value||null;
+  } else {
+    const mRaw=parseInt(document.getElementById('due-manual-month').value);
+    const dRaw=parseInt(document.getElementById('due-manual-day').value);
+    // 범위 검증
+    if(!mRaw||!dRaw)return null;
+    if(mRaw<1||mRaw>12){toast('월은 1~12 사이여야 해요');return null;}
+    if(dRaw<1||dRaw>31){toast('일은 1~31 사이여야 해요');return null;}
+    // 실제 날짜 유효성 체크
+    const testDate=new Date(year,mRaw-1,dRaw);
+    if(testDate.getMonth()!==mRaw-1){toast('유효하지 않은 날짜예요');return null;}
+    return`${year}-${String(mRaw).padStart(2,'0')}-${String(dRaw).padStart(2,'0')}`;
+  }
+}
+
 function addTodo(){
   const inp=document.getElementById('add-inp'),txt=inp.value.trim();if(!txt)return;
-  const due=document.getElementById('new-todo-due').value||null;
+  const due=getNewDueValue();
   const key=todayKey();if(!S.todos)S.todos={};if(!S.todos[key])S.todos[key]=[];
   S.todos[key].push({text:txt,done:false,rank:null,cat:addCat,due,alignScore:null,alignReason:''});
-  save();inp.value='';renderTodos(key);toast('추가됨');
+  save();inp.value='';clearNewDue();renderTodos(key);toast('추가됨');
 }
 function toggleTodo(key,i){
   if(!S.todos[key])return;
@@ -714,6 +785,49 @@ function startEditTodo(key,i,el){
   };
   inp.addEventListener('blur',finish);
   inp.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();inp.blur();}if(e.key==='Escape'){inp.value=cur;inp.blur();}});
+}
+
+function editDue(key,i,el){
+  event.stopPropagation();
+  const cur=S.todos[key][i].due||'';
+  const year=new Date().getFullYear();
+  // 기존 마감일 배지 위치에 인라인 입력 표시
+  const metaRow=el.querySelector('.todo-meta-row');
+  // 이미 편집 중이면 무시
+  if(el.querySelector('.due-edit-wrap'))return;
+  const wrap=document.createElement('div');
+  wrap.className='due-edit-wrap';
+  wrap.style.cssText='display:flex;gap:4px;align-items:center;margin-top:4px;flex-wrap:wrap';
+  wrap.innerHTML=`
+    <span style="font-family:Space Mono,monospace;font-size:10px;color:var(--txt3)">${year}/</span>
+    <input class="due-month-inp" id="de-month" type="number" min="1" max="12" placeholder="MM" value="${cur?cur.split('-')[1]:''}">
+    <span style="font-family:Space Mono,monospace;font-size:10px;color:var(--txt3)">/</span>
+    <input class="due-day-inp" id="de-day" type="number" min="1" max="31" placeholder="DD" value="${cur?cur.split('-')[2]:''}">
+    <button style="background:var(--acc2);border:none;border-radius:5px;color:#fff;font-size:10px;padding:3px 8px;cursor:pointer" onclick="saveDue('${key}',${i})">저장</button>
+    <button style="background:transparent;border:none;color:var(--txt3);font-size:10px;padding:3px 5px;cursor:pointer" onclick="clearDue('${key}',${i})">삭제</button>
+  `;
+  el.querySelector('.todo-body').appendChild(wrap);
+  wrap.querySelector('#de-month').focus();
+}
+function saveDue(key,i){
+  const el=document.querySelector(`[data-idx="${i}"]`);
+  if(!el)return;
+  const mRaw=parseInt(el.querySelector('#de-month')?.value);
+  const dRaw=parseInt(el.querySelector('#de-day')?.value);
+  const year=new Date().getFullYear();
+  if(mRaw&&dRaw){
+    if(mRaw<1||mRaw>12){toast('월은 1~12 사이여야 해요');return;}
+    if(dRaw<1||dRaw>31){toast('일은 1~31 사이여야 해요');return;}
+    const testDate=new Date(year,mRaw-1,dRaw);
+    if(testDate.getMonth()!==mRaw-1){toast('유효하지 않은 날짜예요');return;}
+    S.todos[key][i].due=`${year}-${String(mRaw).padStart(2,'0')}-${String(dRaw).padStart(2,'0')}`;
+    save();
+  }
+  key===todayKey()?renderTodos(key):renderWeekTodos(key);
+}
+function clearDue(key,i){
+  S.todos[key][i].due=null;save();
+  key===todayKey()?renderTodos(key):renderWeekTodos(key);
 }
 
 function renderTodos(key){
@@ -745,6 +859,7 @@ function renderTodos(key){
       </div>
       <div class="todo-actions">
         <button class="todo-edit-btn" onclick="startEditTodo('${key}',${ri},this.closest('.todo-item'))">✎</button>
+        <button class="todo-edit-btn" style="color:var(--acc2);opacity:${t.done?'0':'inherit'}" onclick="editDue('${key}',${ri},this.closest('.todo-item'))" title="마감일 수정">📅</button>
         <button class="todo-del" onclick="event.stopPropagation();delTodo('${key}',${ri})">×</button>
       </div>
     </div>`;
@@ -787,10 +902,11 @@ ${undone.map((t,i)=>`${i+1}. [${t.cat||'없음'}] ${t.text}${t.due?' (마감:'+t
 2사분면(중요하지만 급하지 않은 기획/창작/분석 업무)을 최우선으로 배치하라.
 중요도(1~5)는 위 핵심 가치 및 목표와의 연결성 기준으로 산정하라.
 
-다음 JSON만 반환하라 (설명 없이):
+다음 JSON만 반환하라. JSON 외 어떠한 설명, 마크다운, 텍스트도 절대 포함하지 마라. 오직 JSON만:
 {"sorted":[{"index":0,"rank":1,"alignScore":5,"alignReason":"한줄근거"}]}
 rank: 1=긴급/중요, 2=중요/여유, 3=긴급/덜중요, 4=낮은우선순위
-alignScore: 1~5 (목표 연결성)`;
+alignScore: 1~5 (목표 연결성)
+[중요] 반드시 순수 JSON만 반환하라. 설명 문구, 코드블록, 마크다운 기호 일절 금지.`;
 
   try{
     const res=await fetch(GEMINI_URL,{
@@ -800,19 +916,27 @@ alignScore: 1~5 (목표 연결성)`;
     });
     const data=await res.json();
     const raw=data.candidates?.[0]?.content?.parts?.[0]?.text||'';
-    const clean=raw.replace(/```json|```/g,'').trim();
-    const parsed=JSON.parse(clean);
+    // Robust JSON 추출 — { 와 } 사이만 추출
+    const start=raw.indexOf('{'),end=raw.lastIndexOf('}');
+    if(start===-1||end===-1||start>=end){
+      toast('AI가 응답 형식을 맞추지 못했습니다. 다시 시도해 주세요.');
+      throw new Error('JSON not found in response');
+    }
+    const clean=raw.substring(start,end+1);
+    let parsed;
+    try{parsed=JSON.parse(clean);}
+    catch(parseErr){toast('AI가 응답 형식을 맞추지 못했습니다. 다시 시도해 주세요.');throw parseErr;}
     const undoneIdx=todos.reduce((a,t,i)=>{if(!t.done)a.push(i);return a;},[]);
     const sorted=parsed.sorted.map(s=>({
       ...todos[undoneIdx[s.index]],
       rank:s.rank,
-      alignScore:s.alignScore||null,
+      alignScore:s.alignScore!=null?Math.min(5,Math.max(1,Math.round(s.alignScore))):null,
       alignReason:s.alignReason||''
     }));
     S.todos[key]=[...sorted,...todos.filter(t=>t.done)];
     save();renderTodos(key);toast('AI 정렬 완료 ✦');
   }catch(e){
-    console.error(e);toast('Gemini 오류: '+e.message);
+    console.error(e);
   }
   btn.innerHTML='✦ AI 중요도 정렬 (Gemini)';
   btn.classList.remove('loading');btn.disabled=false;
@@ -873,6 +997,11 @@ function renderAll(){
 
 document.querySelectorAll('.modal-overlay').forEach(el=>{el.addEventListener('click',function(e){if(e.target===this)this.classList.remove('open');});});
 document.getElementById('habit-date-inp').value=todayKey();
+// 연도 고정 초기화
+const _yr=new Date().getFullYear();
+document.getElementById('due-year-label').textContent=_yr;
+const _calInp=document.getElementById('new-todo-due-cal');
+_calInp.min=`${_yr}-01-01`;_calInp.max=`${_yr}-12-31`;
 
 async function init(){
   const d=new Date();
@@ -893,7 +1022,8 @@ window.openHabitModal=openHabitModal;window.confirmHabit=confirmHabit;window.add
 window.toggleCollapse=toggleCollapse;window.filterCat=filterCat;window.setAddCat=setAddCat;
 window.openCatModal=openCatModal;window.saveCat=saveCat;window.closeModal=closeModal;
 window.addTodo=addTodo;window.toggleTodo=toggleTodo;window.delTodo=delTodo;window.aiSort=aiSort;
-window.startEditTodo=startEditTodo;
+window.startEditTodo=startEditTodo;window.editDue=editDue;window.saveDue=saveDue;window.clearDue=clearDue;
+window.setDueMode=setDueMode;window.clearNewDue=clearNewDue;
 window.addWeekTodo=addWeekTodo;window.selectDay=selectDay;window.sw=sw;
 window.saveNewGoal=saveNewGoal;
 
