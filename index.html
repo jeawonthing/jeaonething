@@ -441,9 +441,13 @@ const firebaseConfig = {
   appId: "1:214001610486:web:05b60184be1133e1a886d7"
 };
 
-// ── Gemini API Key ──
-const GEMINI_API_KEY = "AIzaSyBOWpzFtNK36IeKSVPKTNkInirVe2l_YcQ";
-const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${GEMINI_API_KEY}`;
+// ── Gemini API Key (LocalStorage 저장 방식) ──
+let GEMINI_API_KEY = localStorage.getItem('GEMINI_KEY') || '';
+if(!GEMINI_API_KEY){
+  GEMINI_API_KEY = prompt('Gemini API 키를 입력하세요\n(한 번 입력하면 이 기기에 저장됩니다)') || '';
+  if(GEMINI_API_KEY) localStorage.setItem('GEMINI_KEY', GEMINI_API_KEY);
+}
+const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
 
 // ── 사용자 페르소나 (AI 정렬 컨텍스트) ──
 const USER_PERSONA = `사용자: 유튜버 최재원 (삼남래 팀 리더)
