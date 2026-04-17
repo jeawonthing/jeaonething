@@ -962,16 +962,33 @@ function renderCategorySections(){
   });
   Object.values(grouped).forEach(g=>{
     g.items.sort((a,b)=>{
+      // 1) 완료된 항목은 항상 맨 뒤
+      const dA=a.data.done?1:0, dB=b.data.done?1:0;
+      if(dA!==dB)return dA-dB;
+      // 2) 이월된 항목이 맨 위 (미완료 중)
+      const cA=a.data.carried?0:1, cB=b.data.carried?0:1;
+      if(cA!==cB)return cA-cB;
+      // 3) 시간 있는 것 vs 없는 것
       const tA=a.kind==='event'?a.data.time:'';
       const tB=b.kind==='event'?b.data.time:'';
-      if(tA&&tB)return tA.localeCompare(tB);
-      if(tA)return -1;
-      if(tB)return 1;
-      // 이월된 거 먼저
-      const cA=a.data.carried?-1:0;
-      const cB=b.data.carried?-1:0;
-      if(cA!==cB)return cA-cB;
-      return (a.data.done?1:0)-(b.data.done?1:0);
+      if(tA&&!tB)return -1;
+      if(!tA&&tB)return 1;
+      // 4) 둘 다 시간 있으면: "지금 시각과 가까운 순"으로 정렬
+      // - 아직 안 지난 시간(다가오는 것) 우선, 가까운 순
+      // - 이미 지난 시간은 그 뒤, 최근에 지난 순
+      if(tA&&tB){
+        const now=new Date();
+        const nowMin=now.getHours()*60+now.getMinutes();
+        const [ahA,amA]=tA.split(':').map(Number);
+        const [ahB,amB]=tB.split(':').map(Number);
+        const mA=ahA*60+amA, mB=ahB*60+amB;
+        const futureA=mA>=nowMin, futureB=mB>=nowMin;
+        if(futureA&&!futureB)return -1;
+        if(!futureA&&futureB)return 1;
+        if(futureA&&futureB)return mA-mB; // 가까운 미래 먼저
+        return mB-mA; // 둘 다 과거면 최근 것 먼저
+      }
+      return 0;
     });
   });
   sec.innerHTML=S.cats.map(c=>{
@@ -1005,11 +1022,12 @@ function renderItem(it,cat){
   const time=isEvt?t.time:'';
   const repBadge=t.repeat?`<span class="item-badge repeat">↻ ${repeatLabel(t.repeat)}</span>`:'';
   const carBadge=t.carried?`<span class="item-badge carried">↩ ${(t.originDate||'').slice(5).replace('-','/')}</span>`:'';
-  const done=isEvt?false:t.done;
+  const done=!!t.done;
+  const toggleFn=isEvt?`toggleEvent('${t.id}')`:`toggleTask('${t.id}')`;
   return `<div class="item ${tierCls} ${isEvt?'evt':'task'}${done?' done':''}" data-id="${t.id}">
     ${time?`<div class="item-time">${time}</div>`:''}
-    ${!isEvt?`<div class="item-check" onclick="toggleTask('${t.id}')"><span class="chk">✓</span></div>`:''}
-    <div class="item-body" onclick="${isEvt?`editItemPrompt('${t.id}','event')`:`toggleTask('${t.id}')`}">
+    <div class="item-check" onclick="${toggleFn}"><span class="chk">✓</span></div>
+    <div class="item-body" onclick="${toggleFn}">
       <div class="item-text">${escapeHtml(isEvt?t.title:t.text)}</div>
       ${(repBadge||carBadge)?`<div class="item-meta">${carBadge}${repBadge}</div>`:''}
     </div>
@@ -1134,6 +1152,15 @@ window.toggleTask=(id)=>{
   if(t.done)toast('완료 ✓');
 };
 
+window.toggleEvent=(id)=>{
+  const today=todayKey();
+  const e=(S.events[today]||[]).find(x=>x.id===id);
+  if(!e)return;
+  e.done=!e.done;
+  save();renderCategorySections();renderStats();
+  if(e.done)toast('일정 완료 ✓');
+};
+
 window.editItemPrompt=(id,kind)=>{
   const today=todayKey();
   const arr=kind==='event'?(S.events[today]||[]):(S.todos[today]||[]);
@@ -1256,7 +1283,9 @@ function renderCatMgr(){
       <span style="font-size:13px">${c.emoji||'•'}</span>
       <span class="cat-mgr-name">${escapeHtml(c.name)}</span>
       <span style="font-size:9px;color:var(--txt3);font-family:'Space Mono',monospace">[${c.tier==='t2'?'메인':c.tier==='evt'?'일정':'서랍'}]</span>
-      <button class="cat-mgr-del" onclick="delCat(${i})">×</button>
+      <button class="cat-mgr-del" onclick="editCat(${i})" title="이름 수정" style="font-size:12px">✎</button>
+      <button class="cat-mgr-del" onclick="changeCatTier(${i})" title="티어 변경" style="font-size:12px">⇅</button>
+      <button class="cat-mgr-del" onclick="delCat(${i})" title="삭제">×</button>
     </div>
   `).join('')+`
     <div class="cat-mgr-add">
@@ -1270,6 +1299,39 @@ function renderCatMgr(){
     </div>
   `;
 }
+
+window.editCat=(i)=>{
+  const oldName=S.cats[i].name;
+  const newName=prompt('카테고리 이름 수정',oldName);
+  if(newName===null)return;
+  const trimmed=newName.trim();
+  if(!trimmed){toast('이름이 비어있음');return}
+  if(trimmed===oldName)return;
+  if(S.cats.some((c,j)=>j!==i&&c.name===trimmed)){toast('같은 이름 있음');return}
+  // 이름 변경 + 해당 카테고리 사용하는 모든 항목 업데이트
+  S.cats[i].name=trimmed;
+  Object.values(S.todos||{}).forEach(arr=>arr.forEach(t=>{if(t.cat===oldName)t.cat=trimmed}));
+  Object.values(S.events||{}).forEach(arr=>arr.forEach(e=>{if(e.cat===oldName)e.cat=trimmed}));
+  (S.recurring.tasks||[]).forEach(r=>{if(r.cat===oldName)r.cat=trimmed});
+  (S.recurring.events||[]).forEach(r=>{if(r.cat===oldName)r.cat=trimmed});
+  if(S.collapsed[oldName]){S.collapsed[trimmed]=true;delete S.collapsed[oldName]}
+  save();renderCatMgr();renderCategorySections();
+  toast(`${oldName} → ${trimmed}`);
+};
+
+window.changeCatTier=(i)=>{
+  const tiers=[['t2','메인 (보라, 강조)'],['evt','일정 (민트)'],['t3','서랍 (회색, 약함)']];
+  const cur=S.cats[i].tier;
+  const curIdx=tiers.findIndex(t=>t[0]===cur);
+  const next=tiers[(curIdx+1)%3];
+  S.cats[i].tier=next[0];
+  // 이모지도 tier에 맞춰 자동 업데이트 (기본 이모지면)
+  if(['🎯','📅','🗂'].includes(S.cats[i].emoji)){
+    S.cats[i].emoji=next[0]==='t2'?'🎯':next[0]==='evt'?'📅':'🗂';
+  }
+  save();renderCatMgr();renderCategorySections();
+  toast(`${S.cats[i].name} → ${next[1]}`);
+};
 
 window.addCat=()=>{
   const name=document.getElementById('newcat-name').value.trim();
@@ -1555,6 +1617,7 @@ async function init(){
   // 1분마다 갱신
   setInterval(()=>{
     if(document.getElementById('view-weekly').classList.contains('on'))renderWeekView();
+    if(document.getElementById('view-today').classList.contains('on'))renderCategorySections();
     renderStats();
   },60000);
 }
