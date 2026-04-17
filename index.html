@@ -541,7 +541,7 @@ let S = {
   ],
   collapsed:{},
   recurring:{tasks:[],events:[]},
-  lastWeekKey:'', lastMonthKey:'', lastRepeatDate:''
+  lastWeekKey:'', lastMonthKey:'', lastRepeatDate:'', lastCarryDate:''
 };
 
 let isSaving=false, pendingSave=false;
@@ -669,20 +669,33 @@ function calcMonthlyOT(){
   return{done,total:mondays.length||1}
 }
 
-// ─── 미완료 비파괴 이월: 어제까지의 미완료를 "오늘 화면"에 합쳐 보여줌 (데이터는 원래 날짜에 그대로) ───
-function getCarriedItems(){
+// ─── 미완료 자동 이월: 과거 미완료 → 오늘 todos로 실제 이동 (앱 시작 시 1회) ───
+function carryOverToToday(){
   const today=todayKey();
-  const result=[];
-  // 과거 30일까지만 스캔 (성능)
+  if(!S.todos)S.todos={};
+  if(!S.todos[today])S.todos[today]=[];
+  if(S.lastCarryDate===today)return 0;
+  let moved=0;
   const cutoff=new Date();cutoff.setDate(cutoff.getDate()-30);
-  Object.keys(S.todos||{}).forEach(k=>{
+  const existingTexts=new Set(S.todos[today].map(t=>t.text));
+  Object.keys(S.todos).forEach(k=>{
     if(k>=today)return;
     if(new Date(k)<cutoff)return;
-    (S.todos[k]||[]).forEach(t=>{
-      if(!t.done)result.push({...t,_carriedFrom:k,_isCarried:true});
+    const arr=S.todos[k]||[];
+    const keep=[];
+    arr.forEach(t=>{
+      if(!t.done && !existingTexts.has(t.text)){
+        S.todos[today].push({id:uid(),text:t.text,done:false,cat:t.cat,carried:true,originDate:k});
+        existingTexts.add(t.text);
+        moved++;
+      }
+      // 원본은 과거 날짜에 그대로 둔다 (MONTH 뷰 흔적용)
+      keep.push(t);
     });
+    S.todos[k]=keep;
   });
-  return result;
+  S.lastCarryDate=today;
+  return moved;
 }
 
 // ─── 미래 일정 카운트 (오늘 이후 30일) ───
@@ -935,16 +948,11 @@ function renderCategorySections(){
   const today=todayKey();
   const todos=(S.todos||{})[today]||[];
   const events=(S.events||{})[today]||[];
-  const carried=getCarriedItems();
   const sec=document.getElementById('cat-section');
   const grouped={};
   S.cats.forEach(c=>{grouped[c.name]={cat:c,items:[]}});
   const fallback=S.cats[0]?.name;
   todos.forEach(t=>{
-    const cn=grouped[t.cat]?t.cat:fallback;
-    if(grouped[cn])grouped[cn].items.push({kind:'task',data:t});
-  });
-  carried.forEach(t=>{
     const cn=grouped[t.cat]?t.cat:fallback;
     if(grouped[cn])grouped[cn].items.push({kind:'task',data:t});
   });
@@ -960,8 +968,8 @@ function renderCategorySections(){
       if(tA)return -1;
       if(tB)return 1;
       // 이월된 거 먼저
-      const cA=a.data._isCarried?-1:0;
-      const cB=b.data._isCarried?-1:0;
+      const cA=a.data.carried?-1:0;
+      const cB=b.data.carried?-1:0;
       if(cA!==cB)return cA-cB;
       return (a.data.done?1:0)-(b.data.done?1:0);
     });
@@ -996,19 +1004,18 @@ function renderItem(it,cat){
   const isEvt=kind==='event';
   const time=isEvt?t.time:'';
   const repBadge=t.repeat?`<span class="item-badge repeat">↻ ${repeatLabel(t.repeat)}</span>`:'';
-  const carBadge=t._isCarried?`<span class="item-badge carried">↩ ${t._carriedFrom.slice(5).replace('-','/')}</span>`:'';
+  const carBadge=t.carried?`<span class="item-badge carried">↩ ${(t.originDate||'').slice(5).replace('-','/')}</span>`:'';
   const done=isEvt?false:t.done;
-  const carrySrc=t._isCarried?` data-carried-from="${t._carriedFrom}"`:'';
-  return `<div class="item ${tierCls} ${isEvt?'evt':'task'}${done?' done':''}" data-id="${t.id}"${carrySrc}>
+  return `<div class="item ${tierCls} ${isEvt?'evt':'task'}${done?' done':''}" data-id="${t.id}">
     ${time?`<div class="item-time">${time}</div>`:''}
-    ${!isEvt?`<div class="item-check" onclick="toggleTask('${t.id}','${t._carriedFrom||''}')"><span class="chk">✓</span></div>`:''}
-    <div class="item-body" onclick="${isEvt?`editItemPrompt('${t.id}','event','${todayKey()}')`:`toggleTask('${t.id}','${t._carriedFrom||''}')`}">
+    ${!isEvt?`<div class="item-check" onclick="toggleTask('${t.id}')"><span class="chk">✓</span></div>`:''}
+    <div class="item-body" onclick="${isEvt?`editItemPrompt('${t.id}','event')`:`toggleTask('${t.id}')`}">
       <div class="item-text">${escapeHtml(isEvt?t.title:t.text)}</div>
       ${(repBadge||carBadge)?`<div class="item-meta">${carBadge}${repBadge}</div>`:''}
     </div>
     <div class="item-actions">
-      <button class="item-act" onclick="event.stopPropagation();editItemPrompt('${t.id}','${kind}','${t._carriedFrom||todayKey()}')">✎</button>
-      <button class="item-act del" onclick="event.stopPropagation();delItem('${t.id}','${kind}','${t._carriedFrom||todayKey()}')">×</button>
+      <button class="item-act" onclick="event.stopPropagation();editItemPrompt('${t.id}','${kind}')">✎</button>
+      <button class="item-act del" onclick="event.stopPropagation();delItem('${t.id}','${kind}')">×</button>
     </div>
   </div>`;
 }
@@ -1118,18 +1125,18 @@ window.toggleCatBlock=(catName)=>{
   document.querySelector(`.cat-block[data-cat="${catName}"]`)?.classList.toggle('collapsed');
 };
 
-window.toggleTask=(id,carriedFrom)=>{
-  // carriedFrom 있으면 그 날짜에서 토글, 없으면 오늘에서
-  const dateKey=carriedFrom||todayKey();
-  const t=(S.todos[dateKey]||[]).find(x=>x.id===id);
+window.toggleTask=(id)=>{
+  const today=todayKey();
+  const t=(S.todos[today]||[]).find(x=>x.id===id);
   if(!t)return;
   t.done=!t.done;
   save();renderCategorySections();renderStats();
-  if(t.done)toast(carriedFrom?'이월 항목 완료 ✓':'완료 ✓');
+  if(t.done)toast('완료 ✓');
 };
 
-window.editItemPrompt=(id,kind,dateKey)=>{
-  const arr=kind==='event'?(S.events[dateKey]||[]):(S.todos[dateKey]||[]);
+window.editItemPrompt=(id,kind)=>{
+  const today=todayKey();
+  const arr=kind==='event'?(S.events[today]||[]):(S.todos[today]||[]);
   const it=arr.find(x=>x.id===id);
   if(!it)return;
   const cur=kind==='event'?it.title:it.text;
@@ -1139,8 +1146,9 @@ window.editItemPrompt=(id,kind,dateKey)=>{
   save();renderAll();
 };
 
-window.delItem=(id,kind,dateKey)=>{
-  const arr=kind==='event'?(S.events[dateKey]||[]):(S.todos[dateKey]||[]);
+window.delItem=(id,kind)=>{
+  const today=todayKey();
+  const arr=kind==='event'?(S.events[today]||[]):(S.todos[today]||[]);
   const it=arr.find(x=>x.id===id);
   if(!it)return;
   document.getElementById('cf-emoji').textContent='🗑';
@@ -1157,10 +1165,8 @@ window.delItem=(id,kind,dateKey)=>{
 function renderStats(){
   const today=todayKey();
   const todos=(S.todos||{})[today]||[];
-  const carried=getCarriedItems();
-  const allTodos=[...todos,...carried];
-  document.getElementById('s-done').textContent=allTodos.filter(t=>t.done).length;
-  document.getElementById('s-left').textContent=allTodos.filter(t=>!t.done).length;
+  document.getElementById('s-done').textContent=todos.filter(t=>t.done).length;
+  document.getElementById('s-left').textContent=todos.filter(t=>!t.done).length;
   const focusSec=(S.focus.sessions||{})[today]||0;
   let total=focusSec;
   if(S.focus.current.start){
@@ -1173,7 +1179,7 @@ function renderStats(){
 function renderHabitsFooter(){
   const el=document.getElementById('habits-footer');
   const today=todayKey();
-  let html=`<div style="font-family:'Space Mono',monospace;font-size:9px;color:var(--txt3);letter-spacing:2px;margin-bottom:8px">70-DAY HABITS</div>`;
+  let html=`<div style="font-family:'Space Mono',monospace;font-size:9px;color:var(--txt3);letter-spacing:2px;margin-bottom:8px">70-DAY HABITS <span style="opacity:.6;letter-spacing:1px">· 최근 7일 표시</span></div>`;
   if(!S.habits||S.habits.length===0){
     html+=`<button class="habit-add-mini" onclick="addHabitPrompt()">+ 습관 추가</button>`;
     el.innerHTML=html;return;
@@ -1181,6 +1187,8 @@ function renderHabitsFooter(){
   html+=S.habits.map((h,i)=>{
     const done=!!((h.records||{})[today]);
     const streak=getStreak(h);
+    const totalDone=Object.keys(h.records||{}).filter(k=>(h.records||{})[k]).length;
+    const pct=Math.min(100,Math.round(totalDone/70*100));
     const dots=Array.from({length:7}).map((_,di)=>{
       const d=new Date();d.setDate(d.getDate()-(6-di));
       const k=todayKey(d);
@@ -1193,6 +1201,10 @@ function renderHabitsFooter(){
       <div class="habit-dots-mini">${dots}</div>
       <span class="habit-streak-mini${streak>0?' active':''}">${streak>0?'🔥'+streak:'—'}</span>
       <button class="habit-del-mini" onclick="delHabit(${i})">×</button>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;padding:0 0 4px 28px;margin-top:-2px">
+      <div style="flex:1;height:2px;background:var(--bord);border-radius:1px;overflow:hidden"><div style="height:100%;background:var(--evt);width:${pct}%"></div></div>
+      <span style="font-family:'Space Mono',monospace;font-size:8px;color:var(--txt3);min-width:50px;text-align:right">${totalDone}/70일</span>
     </div>`;
   }).join('')+`<button class="habit-add-mini" onclick="addHabitPrompt()">+ 습관 추가</button>`;
   el.innerHTML=html;
@@ -1532,6 +1544,8 @@ async function init(){
   await loadFromCloud();
   checkAutoArchive();
   generateRecurring();
+  const moved=carryOverToToday();
+  if(moved>0)setTimeout(()=>toast(`미완료 ${moved}개 이월됨 ↩`),400);
   await save();
   renderAll();
   startSync();
