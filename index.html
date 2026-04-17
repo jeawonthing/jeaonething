@@ -957,33 +957,39 @@ function renderCategorySections(){
   const todos=(S.todos||{})[today]||[];
   const events=(S.events||{})[today]||[];
   const sec=document.getElementById('cat-section');
+
+  // 일정 카테고리(tier='evt') 찾기
+  const evtCat=S.cats.find(c=>c.tier==='evt');
+  const evtCatName=evtCat?evtCat.name:null;
+
   const grouped={};
   S.cats.forEach(c=>{grouped[c.name]={cat:c,items:[]}});
-  const fallback=S.cats[0]?.name;
+  const fallback=S.cats.find(c=>c.tier!=='evt')?.name || S.cats[0]?.name;
+
+  // 할 일 → 원래 카테고리 (단, 일정 카테고리면 fallback으로)
   todos.forEach(t=>{
-    const cn=grouped[t.cat]?t.cat:fallback;
+    let cn=t.cat;
+    if(!grouped[cn])cn=fallback;
+    if(cn===evtCatName)cn=fallback;
     if(grouped[cn])grouped[cn].items.push({kind:'task',data:t});
   });
+
+  // 일정(시간 있는 것) → 모두 일정 카테고리로
   events.forEach(e=>{
-    const cn=grouped[e.cat]?e.cat:fallback;
+    const cn=evtCatName||fallback;
     if(grouped[cn])grouped[cn].items.push({kind:'event',data:e});
   });
+
   Object.values(grouped).forEach(g=>{
     g.items.sort((a,b)=>{
-      // 1) 완료된 항목은 항상 맨 뒤
       const dA=a.data.done?1:0, dB=b.data.done?1:0;
       if(dA!==dB)return dA-dB;
-      // 2) 이월된 항목이 맨 위 (미완료 중)
       const cA=a.data.carried?0:1, cB=b.data.carried?0:1;
       if(cA!==cB)return cA-cB;
-      // 3) 시간 있는 것 vs 없는 것
       const tA=a.kind==='event'?a.data.time:'';
       const tB=b.kind==='event'?b.data.time:'';
       if(tA&&!tB)return -1;
       if(!tA&&tB)return 1;
-      // 4) 둘 다 시간 있으면: "지금 시각과 가까운 순"으로 정렬
-      // - 아직 안 지난 시간(다가오는 것) 우선, 가까운 순
-      // - 이미 지난 시간은 그 뒤, 최근에 지난 순
       if(tA&&tB){
         const now=new Date();
         const nowMin=now.getHours()*60+now.getMinutes();
@@ -993,41 +999,22 @@ function renderCategorySections(){
         const futureA=mA>=nowMin, futureB=mB>=nowMin;
         if(futureA&&!futureB)return -1;
         if(!futureA&&futureB)return 1;
-        if(futureA&&futureB)return mA-mB; // 가까운 미래 먼저
-        return mB-mA; // 둘 다 과거면 최근 것 먼저
+        if(futureA&&futureB)return mA-mB;
+        return mB-mA;
       }
       return 0;
     });
   });
+
   sec.innerHTML=S.cats.map(c=>{
     const g=grouped[c.name];
     const isCol=!!S.collapsed[c.name];
     const itemsCount=g.items.length;
     const doneCount=g.items.filter(i=>i.data.done).length;
     const progPct=itemsCount?Math.round(doneCount/itemsCount*100):0;
-
-    // 일정 / 할일 분리
-    const evtItems=g.items.filter(it=>it.kind==='event');
-    const taskItems=g.items.filter(it=>it.kind==='task');
-
-    let bodyHtml='';
-    if(evtItems.length===0 && taskItems.length===0){
-      bodyHtml='<div class="cat-empty">비어있음</div>';
-    }else{
-      if(evtItems.length>0){
-        bodyHtml+=`<div class="sub-section">
-          <div class="sub-section-lbl evt-lbl">📅 일정 <span class="sub-count">${evtItems.filter(i=>i.data.done).length}/${evtItems.length}</span></div>
-          ${evtItems.map(it=>renderItem(it,c)).join('')}
-        </div>`;
-      }
-      if(taskItems.length>0){
-        bodyHtml+=`<div class="sub-section">
-          <div class="sub-section-lbl task-lbl">✓ 할 일 <span class="sub-count">${taskItems.filter(i=>i.data.done).length}/${taskItems.length}</span></div>
-          ${taskItems.map(it=>renderItem(it,c)).join('')}
-        </div>`;
-      }
-    }
-
+    const bodyHtml=g.items.length===0
+      ? '<div class="cat-empty">비어있음</div>'
+      : g.items.map(it=>renderItem(it,c)).join('');
     return `<div class="cat-block ${c.tier}${isCol?' collapsed':''}" data-cat="${escapeHtml(c.name)}">
       <div class="cat-head" onclick="toggleCatBlock('${escapeHtml(c.name)}')">
         <div class="cat-dot"></div>
