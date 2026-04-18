@@ -30,7 +30,7 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--txt)
 .sync-indicator.err{background:var(--warn)}
 @keyframes pulse-sync{0%,100%{opacity:1}50%{opacity:.3}}
 
-.context-line{padding:14px 18px 0;font-family:'Space Mono',monospace;font-size:10px;color:var(--txt3);line-height:1.6}
+section{padding:0 16px;margin-top:18px}
 
 /* ── 1년 원씽 (텍스트 헤더, 차분) ── */
 .yearly-bar{margin:14px 18px 0;padding:14px 16px;background:linear-gradient(90deg,rgba(212,165,116,.07),rgba(212,165,116,.02) 70%,transparent);border-left:3px solid rgba(212,165,116,.5);border-radius:0 10px 10px 0;cursor:pointer;transition:background .2s}
@@ -69,9 +69,6 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--txt)
 .drag-handle-tl{position:absolute;top:5px;right:6px;color:var(--txt3);font-size:10px;cursor:grab;opacity:0;transition:opacity .15s;padding:2px 4px;user-select:none;touch-action:none;z-index:5}
 .goal-mini:hover .drag-handle-tl{opacity:.6}
 .drag-handle-tl:active{cursor:grabbing}
-.ctx-arrow{color:var(--txt3);opacity:.5;margin:0 4px}
-.ctx-here{color:var(--t1);font-weight:700}
-section{padding:0 16px;margin-top:18px}
 
 .ot-mega{margin:14px 16px 0;background:linear-gradient(155deg,rgba(74,127,255,.15) 0%,rgba(74,127,255,.04) 60%,transparent 100%);
   border:1.5px solid rgba(74,127,255,.45);border-radius:24px;padding:26px 22px;position:relative;overflow:hidden;transition:all .35s}
@@ -387,13 +384,44 @@ section{padding:0 16px;margin-top:18px}
   </div>
 
   <div class="view on" id="view-today">
+
+    <!-- 1. 1년 원씽 -->
     <div class="yearly-bar" id="yearly-bar" onclick="focusGoal('yearly')">
       <div class="yearly-lbl" id="yearly-lbl">2026 · YEAR</div>
       <div class="yearly-txt ph" id="yearly-disp">올해의 단 하나를 정해주세요</div>
       <textarea class="yearly-inp" id="yearly-inp" rows="2" placeholder="2026년에 반드시 이루고 싶은 단 하나..." onclick="event.stopPropagation()"></textarea>
     </div>
-    <div class="context-line" id="context-line"></div>
 
+    <!-- 2. 월/주 미니 카드 (드래그 가능) -->
+    <section style="margin-top:14px">
+      <div class="goals-mini" id="goals-mini">
+        <div class="goal-mini monthly" data-goal="monthly" draggable="true">
+          <div class="drag-handle-tl" title="드래그하여 위치 변경">⋮⋮</div>
+          <div class="goal-mini-lbl" id="monthly-lbl">MONTHLY</div>
+          <div class="goal-mini-txt ph" id="monthly-disp" onclick="focusGoal('monthly')">이번 달 원씽</div>
+          <textarea class="goal-mini-inp" id="monthly-inp" rows="2"></textarea>
+          <div class="goal-mini-prog">
+            <div class="goal-mini-bar"><div class="goal-mini-fill" id="monthly-fill" style="width:0%"></div></div>
+            <div class="goal-mini-meta" id="monthly-meta">0/0</div>
+          </div>
+        </div>
+        <div class="goal-mini weekly" data-goal="weekly" draggable="true">
+          <div class="drag-handle-tl" title="드래그하여 위치 변경">⋮⋮</div>
+          <div class="goal-mini-lbl" style="display:flex;align-items:center;gap:6px">
+            WEEKLY
+            <div class="weekly-mini-check" id="weekly-mini-check" onclick="event.stopPropagation();toggleWeeklyGoal()">✓</div>
+          </div>
+          <div class="goal-mini-txt ph" id="weekly-disp" onclick="focusGoal('weekly')">이번 주 원씽</div>
+          <textarea class="goal-mini-inp" id="weekly-inp" rows="2"></textarea>
+          <div class="goal-mini-prog">
+            <div class="goal-mini-bar"><div class="goal-mini-fill" id="weekly-fill" style="width:0%"></div></div>
+            <div class="goal-mini-meta" id="weekly-meta">0/7일</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3. 오늘의 원씽 (고정, 드래그 불가) -->
     <div class="ot-mega empty" id="ot-mega">
       <div class="ot-tag">
         <div class="ot-tag-left"><div class="ot-tag-dot"></div> ONE THING · TODAY</div>
@@ -410,35 +438,8 @@ section{padding:0 16px;margin-top:18px}
       </div>
     </div>
 
+    <!-- 4. 통계 + 카테고리 (원씽 없을 때 dim) -->
     <div class="below-ot dim" id="below-ot">
-      <section style="margin-top:14px">
-        <div class="goals-mini" id="goals-mini">
-          <div class="goal-mini monthly" data-goal="monthly" draggable="true">
-            <div class="drag-handle-tl" title="드래그하여 위치 변경">⋮⋮</div>
-            <div class="goal-mini-lbl" id="monthly-lbl">MONTHLY</div>
-            <div class="goal-mini-txt ph" id="monthly-disp" onclick="focusGoal('monthly')">이번 달 원씽</div>
-            <textarea class="goal-mini-inp" id="monthly-inp" rows="2"></textarea>
-            <div class="goal-mini-prog">
-              <div class="goal-mini-bar"><div class="goal-mini-fill" id="monthly-fill" style="width:0%"></div></div>
-              <div class="goal-mini-meta" id="monthly-meta">0/0</div>
-            </div>
-          </div>
-          <div class="goal-mini weekly" data-goal="weekly" draggable="true">
-            <div class="drag-handle-tl" title="드래그하여 위치 변경">⋮⋮</div>
-            <div class="goal-mini-lbl" style="display:flex;align-items:center;gap:6px">
-              WEEKLY
-              <div class="weekly-mini-check" id="weekly-mini-check" onclick="event.stopPropagation();toggleWeeklyGoal()">✓</div>
-            </div>
-            <div class="goal-mini-txt ph" id="weekly-disp" onclick="focusGoal('weekly')">이번 주 원씽</div>
-            <textarea class="goal-mini-inp" id="weekly-inp" rows="2"></textarea>
-            <div class="goal-mini-prog">
-              <div class="goal-mini-bar"><div class="goal-mini-fill" id="weekly-fill" style="width:0%"></div></div>
-              <div class="goal-mini-meta" id="weekly-meta">0/7일</div>
-            </div>
-          </div>
-        </div>
-      </section>
-
       <section>
         <div class="stats-row">
           <div class="stat-card"><div class="stat-num" id="s-done">0</div><div class="stat-lbl">완료</div></div>
@@ -455,9 +456,11 @@ section{padding:0 16px;margin-top:18px}
         <button class="add-mini-btn" onclick="toggleCatMgr()" style="border-style:solid">⚙ 카테고리 관리</button>
         <div class="cat-mgr" id="cat-mgr"></div>
       </section>
-
-      <div class="habits-footer" id="habits-footer"></div>
     </div>
+
+    <!-- 5. 습관 (고정, 드래그 불가) -->
+    <div class="habits-footer" id="habits-footer"></div>
+
   </div>
 
   <div class="view" id="view-weekly">
@@ -774,10 +777,7 @@ function getUpcomingCount(){
 
 // ─── 컨텍스트 라인 (동적 월/주) ───
 function renderContextLine(){
-  const cm=new Date().getMonth()+1;
-  const el=document.getElementById('context-line');
-  const m=S.goals.monthly||'—', w=S.goals.weekly||'—';
-  el.innerHTML=`📍 <span style="color:var(--t1);opacity:.85">${cm}월: ${escapeHtml(m.length>10?m.slice(0,10)+'…':m)}</span><span class="ctx-arrow">›</span><span style="color:var(--t2);opacity:.85">이번주: ${escapeHtml(w.length>10?w.slice(0,10)+'…':w)}</span><span class="ctx-arrow">›</span><span class="ctx-here">오늘</span>`;
+  // 컨텍스트 라인 제거됨 (1년/월/주 카드가 자체 표시)
 }
 
 // ─── 원씽 카드 ───
@@ -829,7 +829,12 @@ window.openOTModal=()=>{
   const isDone=S.goals.otDone;
   const reflectInp=document.getElementById('ot-reflect-inp');
   const yBtn=document.getElementById('ot-yes-btn');
+  const noBtn=document.getElementById('ot-no-btn');
   const counter=document.getElementById('reflect-counter');
+  // 매번 깨끗한 초기 상태로 복원
+  yBtn.style.display='';
+  yBtn.onclick=()=>confirmOT();
+  noBtn.onclick=()=>closeModal('ot-modal');
   document.getElementById('ot-emoji').textContent=isDone?'↩':'⚡';
   document.getElementById('ot-title').textContent=isDone?'달성을 취소할까요?':'오늘의 원씽 달성?';
   document.getElementById('ot-sub').textContent=isDone?'회고 기록도 함께 삭제됩니다':'「'+S.goals.onething+'」';
@@ -853,7 +858,7 @@ window.openOTModal=()=>{
   }
   yBtn.textContent=isDone?'취소':'달성';
   yBtn.className=isDone?'modal-btn yes-red':'modal-btn yes-gold';
-  document.getElementById('ot-no-btn').textContent='아직요';
+  noBtn.textContent='아직요';
   document.getElementById('ot-modal').classList.add('open');
 };
 
@@ -867,7 +872,6 @@ window.confirmOT=()=>{
     if(!S.otLog)S.otLog={};
     S.otLog[today]=true;
     if(!S.reflections)S.reflections={};
-    // 몰입 시간 함께 저장
     if(focusTimer)stopFocus();
     const todayFocus=(S.focus.sessions||{})[today]||0;
     S.reflections[today]={
@@ -877,16 +881,27 @@ window.confirmOT=()=>{
       doneAt:new Date().toISOString()
     };
     save();closeModal('ot-modal');renderOT();renderStats();renderGoals();
+    // 클리어 축하 모달 (닫기 버튼만)
     setTimeout(()=>{
       document.getElementById('ot-emoji').textContent='🏆';
       document.getElementById('ot-title').textContent='오늘 원씽 클리어!';
       document.getElementById('ot-sub').textContent='회고는 HISTORY 탭에서 다시 볼 수 있어요';
       document.getElementById('ot-reflect-inp').style.display='none';
       document.getElementById('reflect-counter').style.display='none';
+      // yes-btn 완전히 숨김 (display:none + 다시 안 나타남)
       document.getElementById('ot-yes-btn').style.display='none';
       document.getElementById('ot-no-btn').textContent='닫기';
+      // 닫기 시 yes-btn 복원하도록 onclick 변경
+      document.getElementById('ot-no-btn').onclick=()=>{
+        closeModal('ot-modal');
+        // 다음 모달 열기를 위해 복원
+        setTimeout(()=>{
+          document.getElementById('ot-yes-btn').style.display='';
+          document.getElementById('ot-no-btn').textContent='아직요';
+          document.getElementById('ot-no-btn').onclick=()=>closeModal('ot-modal');
+        },300);
+      };
       document.getElementById('ot-modal').classList.add('open');
-      setTimeout(()=>{document.getElementById('ot-yes-btn').style.display=''},500);
     },200);
   }else{
     // 취소 처리
