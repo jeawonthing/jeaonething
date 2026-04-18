@@ -31,6 +31,44 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--txt)
 @keyframes pulse-sync{0%,100%{opacity:1}50%{opacity:.3}}
 
 .context-line{padding:14px 18px 0;font-family:'Space Mono',monospace;font-size:10px;color:var(--txt3);line-height:1.6}
+
+/* ── 1년 원씽 (텍스트 헤더, 차분) ── */
+.yearly-bar{margin:14px 18px 0;padding:14px 16px;background:linear-gradient(90deg,rgba(212,165,116,.07),rgba(212,165,116,.02) 70%,transparent);border-left:3px solid rgba(212,165,116,.5);border-radius:0 10px 10px 0;cursor:pointer;transition:background .2s}
+.yearly-bar:hover{background:linear-gradient(90deg,rgba(212,165,116,.12),rgba(212,165,116,.04) 70%,transparent)}
+.yearly-lbl{font-family:'Space Mono',monospace;font-size:9px;letter-spacing:2.5px;color:var(--gold);opacity:.9;margin-bottom:5px;font-weight:700}
+.yearly-txt{font-size:16px;font-weight:700;line-height:1.45;color:var(--txt);word-break:keep-all;letter-spacing:-.2px}
+.yearly-txt.ph{color:var(--txt3);font-weight:400;font-size:14px}
+.yearly-inp{display:none;width:100%;background:rgba(0,0,0,.35);border:1px solid rgba(212,165,116,.4);border-radius:8px;color:var(--txt);font-family:'Noto Sans KR',sans-serif;font-size:15px;font-weight:700;padding:9px 12px;outline:none;resize:none;line-height:1.45}
+.yearly-inp:focus{border-color:var(--gold)}
+
+/* ── 드래그 정렬 ── */
+.item.dragging{opacity:.4;background:rgba(124,106,255,.1) !important}
+.item.drag-over-top{border-top:2px solid var(--t2);padding-top:7px}
+.item.drag-over-bottom{border-bottom:2px solid var(--t2);padding-bottom:7px}
+.item-grip{cursor:grab;color:var(--txt3);font-size:12px;padding:2px 4px;opacity:0;transition:opacity .15s;flex-shrink:0;user-select:none;touch-action:none}
+.item:hover .item-grip{opacity:.7}
+.item-grip:active{cursor:grabbing}
+.cat-block.manual-mode .cat-head-name::after{content:' · 수동';font-family:'Space Mono',monospace;font-size:9px;color:var(--t2);opacity:.7;font-weight:400;letter-spacing:1px}
+.manual-reset-btn{background:none;border:none;color:var(--t2);font-size:10px;cursor:pointer;padding:2px 6px;font-family:'Space Mono',monospace;opacity:.7}
+.manual-reset-btn:hover{opacity:1}
+
+/* 카테고리 블록 자체 드래그 */
+.cat-block{position:relative}
+.cat-block.dragging-block{opacity:.45;transform:scale(.98)}
+.cat-block.drag-over-block-top{box-shadow:0 -3px 0 0 var(--t2)}
+.cat-block.drag-over-block-bottom{box-shadow:0 3px 0 0 var(--t2)}
+.cat-head{position:relative}
+.cat-head-grip{position:absolute;left:-4px;top:50%;transform:translateY(-50%);color:var(--txt3);font-size:11px;cursor:grab;opacity:0;transition:opacity .15s;padding:6px 4px;user-select:none;touch-action:none}
+.cat-block:hover .cat-head-grip{opacity:.6}
+.cat-head-grip:active{cursor:grabbing}
+
+/* 월/주 카드 드래그 */
+.goal-mini{position:relative}
+.goal-mini.dragging-card{opacity:.45;transform:scale(.96)}
+.goal-mini.drag-over-card{box-shadow:0 0 0 2px var(--t2)}
+.drag-handle-tl{position:absolute;top:5px;right:6px;color:var(--txt3);font-size:10px;cursor:grab;opacity:0;transition:opacity .15s;padding:2px 4px;user-select:none;touch-action:none;z-index:5}
+.goal-mini:hover .drag-handle-tl{opacity:.6}
+.drag-handle-tl:active{cursor:grabbing}
 .ctx-arrow{color:var(--txt3);opacity:.5;margin:0 4px}
 .ctx-here{color:var(--t1);font-weight:700}
 section{padding:0 16px;margin-top:18px}
@@ -66,7 +104,8 @@ section{padding:0 16px;margin-top:18px}
 .below-ot{transition:opacity .4s,filter .4s}
 .below-ot.dim{opacity:.35;filter:blur(.5px) saturate(.5)}
 
-.goals-mini{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px}
+.goals-mini{display:flex;gap:8px;margin-top:6px}
+.goals-mini .goal-mini{flex:1;min-width:0}
 .goal-mini{background:var(--surf);border:1px solid var(--bord);border-radius:12px;padding:10px 12px;cursor:pointer;position:relative;overflow:hidden}
 .goal-mini::before{content:'';position:absolute;left:0;top:0;bottom:0;width:2px}
 .goal-mini.monthly::before{background:var(--t1);opacity:.4}
@@ -348,6 +387,11 @@ section{padding:0 16px;margin-top:18px}
   </div>
 
   <div class="view on" id="view-today">
+    <div class="yearly-bar" id="yearly-bar" onclick="focusGoal('yearly')">
+      <div class="yearly-lbl" id="yearly-lbl">2026 · YEAR</div>
+      <div class="yearly-txt ph" id="yearly-disp">올해의 단 하나를 정해주세요</div>
+      <textarea class="yearly-inp" id="yearly-inp" rows="2" placeholder="2026년에 반드시 이루고 싶은 단 하나..." onclick="event.stopPropagation()"></textarea>
+    </div>
     <div class="context-line" id="context-line"></div>
 
     <div class="ot-mega empty" id="ot-mega">
@@ -368,8 +412,9 @@ section{padding:0 16px;margin-top:18px}
 
     <div class="below-ot dim" id="below-ot">
       <section style="margin-top:14px">
-        <div class="goals-mini">
-          <div class="goal-mini monthly">
+        <div class="goals-mini" id="goals-mini">
+          <div class="goal-mini monthly" data-goal="monthly" draggable="true">
+            <div class="drag-handle-tl" title="드래그하여 위치 변경">⋮⋮</div>
             <div class="goal-mini-lbl" id="monthly-lbl">MONTHLY</div>
             <div class="goal-mini-txt ph" id="monthly-disp" onclick="focusGoal('monthly')">이번 달 원씽</div>
             <textarea class="goal-mini-inp" id="monthly-inp" rows="2"></textarea>
@@ -378,7 +423,8 @@ section{padding:0 16px;margin-top:18px}
               <div class="goal-mini-meta" id="monthly-meta">0/0</div>
             </div>
           </div>
-          <div class="goal-mini weekly">
+          <div class="goal-mini weekly" data-goal="weekly" draggable="true">
+            <div class="drag-handle-tl" title="드래그하여 위치 변경">⋮⋮</div>
             <div class="goal-mini-lbl" style="display:flex;align-items:center;gap:6px">
               WEEKLY
               <div class="weekly-mini-check" id="weekly-mini-check" onclick="event.stopPropagation();toggleWeeklyGoal()">✓</div>
@@ -537,7 +583,7 @@ const WD_SHORT=['일','월','화','수','목','금','토'];
 // reflections: { 'YYYY-MM-DD': {ot:'…', text:'…', focusSec:0, doneAt:'iso'} }
 // focus: { sessions:{ 'YYYY-MM-DD': totalSec }, current:{ start:iso|null } }
 let S = {
-  goals:{monthly:'',weekly:'',onething:'',otDone:false,otLastDate:''},
+  goals:{yearly:'',monthly:'',weekly:'',onething:'',otDone:false,otLastDate:''},
   todos:{}, events:{}, habits:[],
   otLog:{}, weeklyDoneLog:{}, history:[],
   reflections:{},
@@ -548,6 +594,8 @@ let S = {
     {name:'개인',tier:'t3',emoji:'🗂'}
   ],
   collapsed:{},
+  manualOrder:{}, // {catName: true} - 수동정렬 모드 카테고리
+  goalsOrder:['monthly','weekly'], // 월/주 카드 순서
   recurring:{tasks:[],events:[]},
   lastWeekKey:'', lastMonthKey:'', lastRepeatDate:'', lastCarryDate:''
 };
@@ -597,6 +645,9 @@ async function loadFromCloud(){
       S.todos=S.todos||{};
       S.recurring=S.recurring||{tasks:[],events:[]};
       S.collapsed=S.collapsed||{};
+      S.manualOrder=S.manualOrder||{};
+      if(!S.goalsOrder||!Array.isArray(S.goalsOrder)||S.goalsOrder.length!==2)S.goalsOrder=['monthly','weekly'];
+      if(!S.goals.yearly)S.goals.yearly='';
       S.habits=S.habits||[];
       S.reflections=S.reflections||{};
       S.focus=S.focus||{sessions:{},current:{start:null}};
@@ -907,14 +958,21 @@ function saveGoalMini(k){
   document.getElementById(k+'-disp').style.display='block';
   save();renderGoals();renderContextLine();
 }
-['monthly','weekly'].forEach(k=>{
+['yearly','monthly','weekly'].forEach(k=>{
   const i=document.getElementById(k+'-inp');
   i.addEventListener('blur',()=>saveGoalMini(k));
   i.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();saveGoalMini(k)}});
 });
 
 function renderGoals(){
+  const cy=new Date().getFullYear();
   const cm=new Date().getMonth()+1;
+  // 1년 원씽
+  document.getElementById('yearly-lbl').textContent=`${cy} · YEAR`;
+  const yd=document.getElementById('yearly-disp');
+  if(S.goals.yearly){yd.textContent=S.goals.yearly;yd.classList.remove('ph')}
+  else{yd.textContent=`${cy}년의 단 하나를 정해주세요`;yd.classList.add('ph')}
+  // 월간
   document.getElementById('monthly-lbl').textContent=`${cm}월 원씽`;
   ['monthly','weekly'].forEach(k=>{
     const d=document.getElementById(k+'-disp');
@@ -981,44 +1039,61 @@ function renderCategorySections(){
   });
 
   Object.values(grouped).forEach(g=>{
-    g.items.sort((a,b)=>{
-      const dA=a.data.done?1:0, dB=b.data.done?1:0;
-      if(dA!==dB)return dA-dB;
-      const cA=a.data.carried?0:1, cB=b.data.carried?0:1;
-      if(cA!==cB)return cA-cB;
-      const tA=a.kind==='event'?a.data.time:'';
-      const tB=b.kind==='event'?b.data.time:'';
-      if(tA&&!tB)return -1;
-      if(!tA&&tB)return 1;
-      if(tA&&tB){
-        const now=new Date();
-        const nowMin=now.getHours()*60+now.getMinutes();
-        const [ahA,amA]=tA.split(':').map(Number);
-        const [ahB,amB]=tB.split(':').map(Number);
-        const mA=ahA*60+amA, mB=ahB*60+amB;
-        const futureA=mA>=nowMin, futureB=mB>=nowMin;
-        if(futureA&&!futureB)return -1;
-        if(!futureA&&futureB)return 1;
-        if(futureA&&futureB)return mA-mB;
-        return mB-mA;
-      }
-      return 0;
-    });
+    const isManual=!!S.manualOrder[g.cat.name];
+    if(isManual){
+      // 수동 모드: orderIdx 기준 (없으면 뒤로)
+      g.items.sort((a,b)=>{
+        const dA=a.data.done?1:0, dB=b.data.done?1:0;
+        if(dA!==dB)return dA-dB;
+        const oA=a.data.orderIdx??9999;
+        const oB=b.data.orderIdx??9999;
+        return oA-oB;
+      });
+    }else{
+      // 자동 모드: 시간/이월/완료 기준
+      g.items.sort((a,b)=>{
+        const dA=a.data.done?1:0, dB=b.data.done?1:0;
+        if(dA!==dB)return dA-dB;
+        const cA=a.data.carried?0:1, cB=b.data.carried?0:1;
+        if(cA!==cB)return cA-cB;
+        const tA=a.kind==='event'?a.data.time:'';
+        const tB=b.kind==='event'?b.data.time:'';
+        if(tA&&!tB)return -1;
+        if(!tA&&tB)return 1;
+        if(tA&&tB){
+          const now=new Date();
+          const nowMin=now.getHours()*60+now.getMinutes();
+          const [ahA,amA]=tA.split(':').map(Number);
+          const [ahB,amB]=tB.split(':').map(Number);
+          const mA=ahA*60+amA, mB=ahB*60+amB;
+          const futureA=mA>=nowMin, futureB=mB>=nowMin;
+          if(futureA&&!futureB)return -1;
+          if(!futureA&&futureB)return 1;
+          if(futureA&&futureB)return mA-mB;
+          return mB-mA;
+        }
+        return 0;
+      });
+    }
   });
 
   sec.innerHTML=S.cats.map(c=>{
     const g=grouped[c.name];
     const isCol=!!S.collapsed[c.name];
+    const isManual=!!S.manualOrder[c.name];
     const itemsCount=g.items.length;
     const doneCount=g.items.filter(i=>i.data.done).length;
     const progPct=itemsCount?Math.round(doneCount/itemsCount*100):0;
     const bodyHtml=g.items.length===0
       ? '<div class="cat-empty">비어있음</div>'
       : g.items.map(it=>renderItem(it,c)).join('');
-    return `<div class="cat-block ${c.tier}${isCol?' collapsed':''}" data-cat="${escapeHtml(c.name)}">
+    const manualBtn=isManual?`<button class="manual-reset-btn" onclick="event.stopPropagation();resetManualOrder('${escapeHtml(c.name)}')" title="자동 정렬로 복원">↺ 자동</button>`:'';
+    return `<div class="cat-block ${c.tier}${isCol?' collapsed':''}${isManual?' manual-mode':''}" data-cat="${escapeHtml(c.name)}" draggable="true">
+      <div class="cat-head-grip" title="드래그하여 카테고리 순서 변경">⋮⋮</div>
       <div class="cat-head" onclick="toggleCatBlock('${escapeHtml(c.name)}')">
         <div class="cat-dot"></div>
         <div class="cat-head-name">${c.emoji||''} ${escapeHtml(c.name)}</div>
+        ${manualBtn}
         <div class="cat-head-count">${doneCount}/${itemsCount}</div>
         <div class="cat-arrow">▾</div>
       </div>
@@ -1032,6 +1107,9 @@ function renderCategorySections(){
       </div>
     </div>`;
   }).join('');
+
+  setupDragHandlers();
+  setupCatBlockDragHandlers();
 }
 
 function renderItem(it,cat){
@@ -1042,7 +1120,8 @@ function renderItem(it,cat){
   const carBadge=t.carried?`<span class="item-badge carried">↩ ${(t.originDate||'').slice(5).replace('-','/')}</span>`:'';
   const done=!!t.done;
   const toggleFn=isEvt?`toggleEvent('${t.id}')`:`toggleTask('${t.id}')`;
-  return `<div class="item ${tierCls} ${isEvt?'evt':'task'}${done?' done':''}" data-id="${t.id}">
+  return `<div class="item ${tierCls} ${isEvt?'evt':'task'}${done?' done':''}" data-id="${t.id}" data-kind="${kind}" data-cat="${escapeHtml(cat.name)}" draggable="true">
+    <div class="item-grip" title="드래그하여 순서 변경">⋮⋮</div>
     ${time?`<div class="item-time">${time}</div>`:''}
     <div class="item-check" onclick="${toggleFn}"><span class="chk">✓</span></div>
     <div class="item-body" onclick="${toggleFn}">
@@ -1057,6 +1136,314 @@ function renderItem(it,cat){
 }
 
 function repeatLabel(r){if(r==='daily')return'매일';if(r==='weekly')return'매주';if(r==='monthly')return'매월';return r}
+
+// ─── 드래그 정렬 ───
+let dragSrcEl=null;
+function setupDragHandlers(){
+  document.querySelectorAll('.cat-section .item').forEach(el=>{
+    el.addEventListener('dragstart',onDragStart);
+    el.addEventListener('dragover',onDragOver);
+    el.addEventListener('dragleave',onDragLeave);
+    el.addEventListener('drop',onDrop);
+    el.addEventListener('dragend',onDragEnd);
+    // 모바일 터치 (간단 폴백 — 길게 누르고 이동)
+    let touchStartY=0,touchStartTime=0,touchHoldTimer=null;
+    el.addEventListener('touchstart',(e)=>{
+      const grip=e.target.closest('.item-grip');
+      if(!grip)return;
+      touchStartY=e.touches[0].clientY;
+      touchStartTime=Date.now();
+      dragSrcEl=el;
+      el.classList.add('dragging');
+    },{passive:true});
+    el.addEventListener('touchmove',(e)=>{
+      if(!dragSrcEl||dragSrcEl!==el)return;
+      e.preventDefault();
+      const y=e.touches[0].clientY;
+      const targetEl=document.elementFromPoint(e.touches[0].clientX,y);
+      const targetItem=targetEl?.closest('.item');
+      document.querySelectorAll('.drag-over-top,.drag-over-bottom').forEach(x=>x.classList.remove('drag-over-top','drag-over-bottom'));
+      if(targetItem&&targetItem!==el){
+        const rect=targetItem.getBoundingClientRect();
+        if(y<rect.top+rect.height/2)targetItem.classList.add('drag-over-top');
+        else targetItem.classList.add('drag-over-bottom');
+      }
+    },{passive:false});
+    el.addEventListener('touchend',(e)=>{
+      if(!dragSrcEl||dragSrcEl!==el)return;
+      const y=e.changedTouches[0].clientY;
+      const targetEl=document.elementFromPoint(e.changedTouches[0].clientX,y);
+      const targetItem=targetEl?.closest('.item');
+      if(targetItem&&targetItem!==el){
+        const rect=targetItem.getBoundingClientRect();
+        const insertAfter=y>rect.top+rect.height/2;
+        performReorder(el,targetItem,insertAfter);
+      }
+      document.querySelectorAll('.drag-over-top,.drag-over-bottom').forEach(x=>x.classList.remove('drag-over-top','drag-over-bottom'));
+      el.classList.remove('dragging');
+      dragSrcEl=null;
+    });
+  });
+}
+
+function onDragStart(e){
+  dragSrcEl=this;
+  this.classList.add('dragging');
+  e.dataTransfer.effectAllowed='move';
+  e.dataTransfer.setData('text/plain',this.dataset.id);
+}
+function onDragOver(e){
+  if(!dragSrcEl||dragSrcEl===this)return;
+  // 같은 카테고리 + 같은 종류만 허용
+  if(dragSrcEl.dataset.cat!==this.dataset.cat)return;
+  if(dragSrcEl.dataset.kind!==this.dataset.kind)return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect='move';
+  const rect=this.getBoundingClientRect();
+  const isTop=e.clientY<rect.top+rect.height/2;
+  this.classList.toggle('drag-over-top',isTop);
+  this.classList.toggle('drag-over-bottom',!isTop);
+}
+function onDragLeave(){
+  this.classList.remove('drag-over-top','drag-over-bottom');
+}
+function onDrop(e){
+  e.preventDefault();
+  if(!dragSrcEl||dragSrcEl===this)return;
+  if(dragSrcEl.dataset.cat!==this.dataset.cat)return;
+  if(dragSrcEl.dataset.kind!==this.dataset.kind)return;
+  const rect=this.getBoundingClientRect();
+  const insertAfter=e.clientY>rect.top+rect.height/2;
+  performReorder(dragSrcEl,this,insertAfter);
+  this.classList.remove('drag-over-top','drag-over-bottom');
+}
+function onDragEnd(){
+  this.classList.remove('dragging');
+  document.querySelectorAll('.drag-over-top,.drag-over-bottom').forEach(x=>x.classList.remove('drag-over-top','drag-over-bottom'));
+  dragSrcEl=null;
+}
+
+function performReorder(srcEl,targetEl,insertAfter){
+  const today=todayKey();
+  const catName=srcEl.dataset.cat;
+  const kind=srcEl.dataset.kind;
+  const srcId=srcEl.dataset.id;
+  const targetId=targetEl.dataset.id;
+
+  // 해당 카테고리의 같은 종류 항목들 모으기 (순서 부여용)
+  // 일정은 모두 evt 카테고리에 모이므로, 해당 카테고리의 대상 배열 결정
+  const evtCat=S.cats.find(c=>c.tier==='evt');
+  const isEvtCat=evtCat&&catName===evtCat.name;
+
+  // 카테고리 안의 같은 kind 모두 가져와서 reorder
+  let arr;
+  if(kind==='event'){
+    arr=(S.events[today]||[]).filter(e=>{
+      // 일정은 모두 evt 카테고리로 모이므로 같은 카테고리 필터 X. 단순히 모든 event
+      return true;
+    });
+  }else{
+    arr=(S.todos[today]||[]).filter(t=>{
+      // 같은 카테고리의 task만
+      const tc=S.cats.find(c=>c.name===t.cat)?(t.cat):(S.cats[0].name);
+      return tc===catName;
+    });
+  }
+
+  const srcIdx=arr.findIndex(x=>x.id===srcId);
+  const tgtIdx=arr.findIndex(x=>x.id===targetId);
+  if(srcIdx<0||tgtIdx<0)return;
+  const [moved]=arr.splice(srcIdx,1);
+  let insertAt=arr.findIndex(x=>x.id===targetId);
+  if(insertAfter)insertAt+=1;
+  arr.splice(insertAt,0,moved);
+
+  // orderIdx 부여
+  arr.forEach((it,i)=>{it.orderIdx=i});
+
+  // 수동 모드 활성화
+  S.manualOrder[catName]=true;
+
+  save();renderCategorySections();
+  toast('순서 변경됨 · 수동 정렬 모드');
+}
+
+window.resetManualOrder=(catName)=>{
+  delete S.manualOrder[catName];
+  // 모든 항목의 orderIdx 제거
+  const today=todayKey();
+  (S.todos[today]||[]).forEach(t=>{if(t.cat===catName)delete t.orderIdx});
+  (S.events[today]||[]).forEach(e=>{delete e.orderIdx});
+  save();renderCategorySections();
+  toast('자동 정렬로 복원됨');
+};
+
+// ─── 카테고리 블록 자체 드래그 ───
+let dragSrcBlock=null;
+function setupCatBlockDragHandlers(){
+  document.querySelectorAll('.cat-block').forEach(el=>{
+    el.addEventListener('dragstart',(e)=>{
+      // item 드래그가 우선이면 무시
+      if(e.target.closest('.item'))return;
+      dragSrcBlock=el;
+      el.classList.add('dragging-block');
+      e.dataTransfer.effectAllowed='move';
+      e.dataTransfer.setData('text/plain','block:'+el.dataset.cat);
+    });
+    el.addEventListener('dragover',(e)=>{
+      if(!dragSrcBlock||dragSrcBlock===el)return;
+      e.preventDefault();
+      e.stopPropagation();
+      const rect=el.getBoundingClientRect();
+      const isTop=e.clientY<rect.top+rect.height/2;
+      el.classList.toggle('drag-over-block-top',isTop);
+      el.classList.toggle('drag-over-block-bottom',!isTop);
+    });
+    el.addEventListener('dragleave',()=>{
+      el.classList.remove('drag-over-block-top','drag-over-block-bottom');
+    });
+    el.addEventListener('drop',(e)=>{
+      if(!dragSrcBlock||dragSrcBlock===el)return;
+      e.preventDefault();
+      e.stopPropagation();
+      const rect=el.getBoundingClientRect();
+      const insertAfter=e.clientY>rect.top+rect.height/2;
+      const srcName=dragSrcBlock.dataset.cat;
+      const tgtName=el.dataset.cat;
+      reorderCats(srcName,tgtName,insertAfter);
+      el.classList.remove('drag-over-block-top','drag-over-block-bottom');
+    });
+    el.addEventListener('dragend',()=>{
+      el.classList.remove('dragging-block');
+      document.querySelectorAll('.drag-over-block-top,.drag-over-block-bottom').forEach(x=>x.classList.remove('drag-over-block-top','drag-over-block-bottom'));
+      dragSrcBlock=null;
+    });
+    // 모바일 터치 (그립만)
+    let blockTouch=null;
+    el.querySelector('.cat-head-grip')?.addEventListener('touchstart',(e)=>{
+      e.stopPropagation();
+      blockTouch={el,startY:e.touches[0].clientY};
+      dragSrcBlock=el;
+      el.classList.add('dragging-block');
+    },{passive:true});
+    el.querySelector('.cat-head-grip')?.addEventListener('touchmove',(e)=>{
+      if(!blockTouch||blockTouch.el!==el)return;
+      e.preventDefault();
+      const y=e.touches[0].clientY;
+      const tgt=document.elementFromPoint(e.touches[0].clientX,y)?.closest('.cat-block');
+      document.querySelectorAll('.drag-over-block-top,.drag-over-block-bottom').forEach(x=>x.classList.remove('drag-over-block-top','drag-over-block-bottom'));
+      if(tgt&&tgt!==el){
+        const rect=tgt.getBoundingClientRect();
+        if(y<rect.top+rect.height/2)tgt.classList.add('drag-over-block-top');
+        else tgt.classList.add('drag-over-block-bottom');
+      }
+    },{passive:false});
+    el.querySelector('.cat-head-grip')?.addEventListener('touchend',(e)=>{
+      if(!blockTouch||blockTouch.el!==el)return;
+      const y=e.changedTouches[0].clientY;
+      const tgt=document.elementFromPoint(e.changedTouches[0].clientX,y)?.closest('.cat-block');
+      if(tgt&&tgt!==el){
+        const rect=tgt.getBoundingClientRect();
+        const insertAfter=y>rect.top+rect.height/2;
+        reorderCats(el.dataset.cat,tgt.dataset.cat,insertAfter);
+      }
+      document.querySelectorAll('.drag-over-block-top,.drag-over-block-bottom').forEach(x=>x.classList.remove('drag-over-block-top','drag-over-block-bottom'));
+      el.classList.remove('dragging-block');
+      blockTouch=null;dragSrcBlock=null;
+    });
+  });
+}
+
+function reorderCats(srcName,tgtName,insertAfter){
+  const srcIdx=S.cats.findIndex(c=>c.name===srcName);
+  const tgtIdx=S.cats.findIndex(c=>c.name===tgtName);
+  if(srcIdx<0||tgtIdx<0)return;
+  const [moved]=S.cats.splice(srcIdx,1);
+  let insertAt=S.cats.findIndex(c=>c.name===tgtName);
+  if(insertAfter)insertAt+=1;
+  S.cats.splice(insertAt,0,moved);
+  save();renderAll();
+  toast('카테고리 순서 변경됨');
+}
+
+// ─── 월/주 카드 드래그 ───
+let dragSrcGoal=null;
+function setupGoalCardDragHandlers(){
+  // 저장된 순서 적용
+  applyGoalsOrder();
+  document.querySelectorAll('#goals-mini .goal-mini').forEach(el=>{
+    el.addEventListener('dragstart',(e)=>{
+      // input/textarea/체크박스 등에서 시작하면 무시
+      if(e.target.closest('textarea,input,.weekly-mini-check'))return;
+      dragSrcGoal=el;
+      el.classList.add('dragging-card');
+      e.dataTransfer.effectAllowed='move';
+      e.dataTransfer.setData('text/plain','goal:'+el.dataset.goal);
+    });
+    el.addEventListener('dragover',(e)=>{
+      if(!dragSrcGoal||dragSrcGoal===el)return;
+      e.preventDefault();
+      el.classList.add('drag-over-card');
+    });
+    el.addEventListener('dragleave',()=>{
+      el.classList.remove('drag-over-card');
+    });
+    el.addEventListener('drop',(e)=>{
+      if(!dragSrcGoal||dragSrcGoal===el)return;
+      e.preventDefault();
+      swapGoals(dragSrcGoal.dataset.goal,el.dataset.goal);
+      el.classList.remove('drag-over-card');
+    });
+    el.addEventListener('dragend',()=>{
+      el.classList.remove('dragging-card');
+      document.querySelectorAll('.drag-over-card').forEach(x=>x.classList.remove('drag-over-card'));
+      dragSrcGoal=null;
+    });
+    // 모바일 터치 (핸들만)
+    const handle=el.querySelector('.drag-handle-tl');
+    let goalTouch=null;
+    handle?.addEventListener('touchstart',(e)=>{
+      e.stopPropagation();
+      goalTouch={el,startY:e.touches[0].clientY};
+      dragSrcGoal=el;
+      el.classList.add('dragging-card');
+    },{passive:true});
+    handle?.addEventListener('touchmove',(e)=>{
+      if(!goalTouch||goalTouch.el!==el)return;
+      e.preventDefault();
+      const tgt=document.elementFromPoint(e.touches[0].clientX,e.touches[0].clientY)?.closest('.goal-mini');
+      document.querySelectorAll('.drag-over-card').forEach(x=>x.classList.remove('drag-over-card'));
+      if(tgt&&tgt!==el)tgt.classList.add('drag-over-card');
+    },{passive:false});
+    handle?.addEventListener('touchend',(e)=>{
+      if(!goalTouch||goalTouch.el!==el)return;
+      const tgt=document.elementFromPoint(e.changedTouches[0].clientX,e.changedTouches[0].clientY)?.closest('.goal-mini');
+      if(tgt&&tgt!==el)swapGoals(el.dataset.goal,tgt.dataset.goal);
+      document.querySelectorAll('.drag-over-card').forEach(x=>x.classList.remove('drag-over-card'));
+      el.classList.remove('dragging-card');
+      goalTouch=null;dragSrcGoal=null;
+    });
+  });
+}
+
+function swapGoals(a,b){
+  if(a===b)return;
+  const order=[...(S.goalsOrder||['monthly','weekly'])];
+  const ia=order.indexOf(a), ib=order.indexOf(b);
+  if(ia<0||ib<0)return;
+  [order[ia],order[ib]]=[order[ib],order[ia]];
+  S.goalsOrder=order;
+  save();applyGoalsOrder();
+  toast('월/주 카드 순서 변경됨');
+}
+
+function applyGoalsOrder(){
+  const order=S.goalsOrder||['monthly','weekly'];
+  document.querySelectorAll('#goals-mini .goal-mini').forEach(el=>{
+    const idx=order.indexOf(el.dataset.goal);
+    el.style.order=idx>=0?idx:99;
+  });
+}
 
 function renderAddForm(c){
   const cn=c.name;
@@ -1666,6 +2053,7 @@ function renderAll(){
   renderContextLine();
   renderOT();
   renderGoals();
+  applyGoalsOrder();
   renderUpcomingBanner();
   renderStats();
   renderCategorySections();
@@ -1691,11 +2079,10 @@ async function init(){
   if(moved>0)setTimeout(()=>toast(`미완료 ${moved}개 이월됨 ↩`),400);
   await save();
   renderAll();
+  setupGoalCardDragHandlers();
   startSync();
-  // 진행 중 몰입 세션 복원
   if(S.focus.current.start)startFocusTimer();
   document.getElementById('loading-screen').classList.add('hide');
-  // 1분마다 갱신
   setInterval(()=>{
     if(document.getElementById('view-weekly').classList.contains('on'))renderWeekView();
     if(document.getElementById('view-today').classList.contains('on'))renderCategorySections();
