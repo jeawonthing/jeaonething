@@ -736,25 +736,37 @@ function carryOverToToday(){
   const today=todayKey();
   if(!S.todos)S.todos={};
   if(!S.todos[today])S.todos[today]=[];
-  if(S.lastCarryDate===today)return 0;
   let moved=0;
   const cutoff=new Date();cutoff.setDate(cutoff.getDate()-30);
   const existingTexts=new Set(S.todos[today].map(t=>t.text));
+  // 이미 오늘에 같은 originId로 이월된 것이 있는지도 체크 (중복 방지)
+  const existingOriginIds=new Set(S.todos[today].filter(t=>t.carriedOriginId).map(t=>t.carriedOriginId));
   Object.keys(S.todos).forEach(k=>{
     if(k>=today)return;
     if(new Date(k)<cutoff)return;
     const arr=S.todos[k]||[];
-    const keep=[];
     arr.forEach(t=>{
-      if(!t.done && !existingTexts.has(t.text)){
-        S.todos[today].push({id:uid(),text:t.text,done:false,cat:t.cat,carried:true,originDate:k});
-        existingTexts.add(t.text);
-        moved++;
-      }
-      // 원본은 과거 날짜에 그대로 둔다 (MONTH 뷰 흔적용)
-      keep.push(t);
+      // 이미 이월 처리된 항목(carried_out)이거나 완료된 항목은 스킵
+      if(t.done||t.carried_out)return;
+      // 텍스트 또는 origin id 중복이면 스킵
+      if(existingTexts.has(t.text))return;
+      if(existingOriginIds.has(t.id))return;
+      // 오늘로 새 카드 복사
+      S.todos[today].push({
+        id:uid(),
+        text:t.text,
+        done:false,
+        cat:t.cat,
+        carried:true,
+        originDate:k,
+        carriedOriginId:t.id  // 원본 id 추적
+      });
+      existingTexts.add(t.text);
+      existingOriginIds.add(t.id);
+      moved++;
+      // 원본도 완료 처리 (다시 이월 방지)
+      t.carried_out=true;
     });
-    S.todos[k]=keep;
   });
   S.lastCarryDate=today;
   return moved;
@@ -1591,8 +1603,18 @@ window.toggleTask=(id)=>{
   const t=(S.todos[today]||[]).find(x=>x.id===id);
   if(!t)return;
   t.done=!t.done;
+  // 이월된 항목이면 원본도 같이 토글
+  if(t.carried&&t.carriedOriginId&&t.originDate){
+    const origArr=S.todos[t.originDate]||[];
+    const orig=origArr.find(x=>x.id===t.carriedOriginId);
+    if(orig){
+      orig.done=t.done;
+      // 완료되면 carried_out 유지, 미완료로 돌리면 carried_out도 해제
+      if(!t.done)orig.carried_out=false;
+    }
+  }
   save();renderCategorySections();renderStats();
-  if(t.done)toast('완료 ✓');
+  if(t.done)toast(t.carried?'이월 항목 완료 ✓':'완료 ✓');
 };
 
 window.toggleEvent=(id)=>{
@@ -1656,6 +1678,16 @@ window.delItem=(id,kind)=>{
   }else{
     document.getElementById('cf-sub').textContent=sub;
     document.getElementById('cf-yes-btn').onclick=()=>{
+      // 이월 항목이면 원본 정리
+      if(it.carried&&it.carriedOriginId&&it.originDate){
+        const origArr=S.todos[it.originDate]||[];
+        const orig=origArr.find(x=>x.id===it.carriedOriginId);
+        if(orig){
+          // 원본을 done+carried_out로 마킹 (영영 안 따라옴)
+          orig.done=true;
+          orig.carried_out=true;
+        }
+      }
       const i=arr.indexOf(it);arr.splice(i,1);save();renderAll();closeModal('confirm-modal');toast('삭제됨');
     };
   }
@@ -2090,6 +2122,34 @@ async function init(){
   await loadFromCloud();
   checkAutoArchive();
   generateRecurring();
+
+  // ── 1회 마이그레이션: 기존 carried 항목들의 원본 정리 ──
+  if(!S.migratedCarryV2){
+    const today=todayKey();
+    const todayItems=(S.todos||{})[today]||[];
+    todayItems.forEach(t=>{
+      if(t.carried&&t.originDate){
+        const origArr=(S.todos||{})[t.originDate]||[];
+        // 원본 추적 — carriedOriginId 있으면 정확히, 없으면 텍스트로
+        let orig=t.carriedOriginId?origArr.find(x=>x.id===t.carriedOriginId):origArr.find(x=>x.text===t.text&&!x.carried);
+        if(orig){
+          orig.carried_out=true;
+          if(t.done)orig.done=true;
+          if(!t.carriedOriginId)t.carriedOriginId=orig.id;
+        }
+      }
+    });
+    // 그리고 과거 모든 미완료 항목 중에 오늘에 이미 carried 있는 텍스트는 carried_out 처리
+    const carriedTexts=new Set(todayItems.filter(t=>t.carried).map(t=>t.text));
+    Object.keys(S.todos||{}).forEach(k=>{
+      if(k>=today)return;
+      (S.todos[k]||[]).forEach(t=>{
+        if(!t.done&&carriedTexts.has(t.text))t.carried_out=true;
+      });
+    });
+    S.migratedCarryV2=true;
+  }
+
   const moved=carryOverToToday();
   if(moved>0)setTimeout(()=>toast(`미완료 ${moved}개 이월됨 ↩`),400);
   await save();
