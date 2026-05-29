@@ -702,6 +702,7 @@ function fmtSecLong(sec){const h=Math.floor(sec/3600),m=Math.floor((sec%3600)/60
 
 // ─── Firebase ───
 async function save(){
+  S.lastSaveAt=Date.now();
   try{localStorage.setItem('onesys_v3',JSON.stringify(S))}catch(e){}
   if(!firebaseOK||!docRef){setSync('err');return}
   if(isSaving){pendingSave=true;return}
@@ -784,7 +785,26 @@ async function loadFromCloud(){
 function startSync(){
   if(!firebaseOK||!docRef||!onSnapshot)return;
   try{
-    onSnapshot(docRef,(snap)=>{if(snap.exists()){S={...S,...snap.data()};renderAll()}setSync('ok')},()=>setSync('err'));
+    onSnapshot(docRef,(snap)=>{
+      // 저장 중이거나 직전에 저장한 결과면 무시 (자기 자신 덮어쓰기 방지)
+      if(isSaving||pendingSave)return;
+      if(snap.metadata&&snap.metadata.hasPendingWrites)return;
+      if(!snap.exists())return;
+      const remote=snap.data();
+      // 로컬이 더 최신이면 무시 (lastSaveAt 비교)
+      const localTs=S.lastSaveAt||0;
+      const remoteTs=remote.lastSaveAt||0;
+      if(localTs>remoteTs+100)return; // 100ms 여유
+      // 안전한 머지
+      S={...S,...remote};
+      // 안전장치 재적용
+      if(!S.goals)S.goals={yearly:'',monthly:'',weekly:'',onething:'',otDone:false,otLastDate:''};
+      if(typeof S.goals.yearly==='undefined')S.goals.yearly='';
+      S.events=S.events||{};
+      S.todos=S.todos||{};
+      renderAll();
+      setSync('ok');
+    },()=>setSync('err'));
   }catch(e){console.warn('startSync 실패:',e.message)}
 }
 
