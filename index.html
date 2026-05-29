@@ -204,7 +204,7 @@ section{padding:0 16px;margin-top:18px}
 .item-badge{font-family:'Space Mono',monospace;font-size:8.5px;padding:1px 6px;border-radius:4px;background:rgba(255,255,255,.04);color:var(--txt3)}
 .item-badge.repeat{color:var(--t2)}
 .item-badge.due{color:var(--warn)}
-.item-badge.carried{color:var(--warn)}
+.item-badge.carried{color:var(--txt3);opacity:.7}
 .item-badge.future{color:var(--evt)}
 .item-actions{display:flex;gap:2px;opacity:0;transition:opacity .15s;flex-shrink:0}
 .item:hover .item-actions{opacity:1}
@@ -695,7 +695,7 @@ function thisMonthKey(){const d=new Date();return`${d.getFullYear()}-${z(d.getMo
 function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,7)}
 function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');clearTimeout(window.__t);window.__t=setTimeout(()=>t.classList.remove('show'),1800)}
 function closeModal(id){document.getElementById(id).classList.remove('open')}
-function setSync(s){document.getElementById('sync-dot').className='sync-indicator '+s}
+function setSync(s){const el=document.getElementById('sync-dot');if(el)el.className='sync-indicator '+s}
 function escapeHtml(s){return(s||'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
 function fmtSec(sec){const h=Math.floor(sec/3600),m=Math.floor((sec%3600)/60);if(h>0)return`${h}:${z(m)}`;return`${m}분`}
 function fmtSecLong(sec){const h=Math.floor(sec/3600),m=Math.floor((sec%3600)/60);if(h>0)return`${h}시간 ${m}분`;return`${m}분`}
@@ -874,33 +874,34 @@ function carryOverToToday(){
   if(!S.todos[today])S.todos[today]=[];
   let moved=0;
   const cutoff=new Date();cutoff.setDate(cutoff.getDate()-30);
-  const existingTexts=new Set(S.todos[today].map(t=>t.text));
-  // 이미 오늘에 같은 originId로 이월된 것이 있는지도 체크 (중복 방지)
+  // 카테고리+텍스트 조합으로 중복 체크 (같은 텍스트라도 카테고리 다르면 OK)
+  const existingKeys=new Set(S.todos[today].map(t=>`${t.cat}::${t.text}`));
   const existingOriginIds=new Set(S.todos[today].filter(t=>t.carriedOriginId).map(t=>t.carriedOriginId));
-  Object.keys(S.todos).forEach(k=>{
-    if(k>=today)return;
-    if(new Date(k)<cutoff)return;
+  // 과거 → 최근 순으로 정렬해서 처리 (최신 카피 보존)
+  const pastKeys=Object.keys(S.todos).filter(k=>k<today&&new Date(k)>=cutoff).sort();
+  pastKeys.forEach(k=>{
     const arr=S.todos[k]||[];
     arr.forEach(t=>{
-      // 이미 이월 처리된 항목(carried_out)이거나 완료된 항목은 스킵
+      if(!t||typeof t!=='object')return;
+      // 완료/이월 처리된 건 스킵
       if(t.done||t.carried_out)return;
-      // 텍스트 또는 origin id 중복이면 스킵
-      if(existingTexts.has(t.text))return;
+      const key=`${t.cat}::${t.text}`;
+      if(existingKeys.has(key))return;
       if(existingOriginIds.has(t.id))return;
-      // 오늘로 새 카드 복사
+      // 오늘로 복사
       S.todos[today].push({
         id:uid(),
         text:t.text,
         done:false,
         cat:t.cat,
+        due:t.due||null,
         carried:true,
         originDate:k,
-        carriedOriginId:t.id  // 원본 id 추적
+        carriedOriginId:t.id
       });
-      existingTexts.add(t.text);
+      existingKeys.add(key);
       existingOriginIds.add(t.id);
       moved++;
-      // 원본도 완료 처리 (다시 이월 방지)
       t.carried_out=true;
     });
   });
@@ -1075,7 +1076,10 @@ function startFocus(){
 function stopFocus(){
   if(!S.focus.current.start)return;
   const start=new Date(S.focus.current.start);
-  const elapsed=Math.floor((new Date()-start)/1000);
+  let elapsed=Math.floor((new Date()-start)/1000);
+  // 안전장치: 음수면 0, 24시간 초과면 24시간으로 (시계 오작동/장기간 미정지 방어)
+  if(isNaN(elapsed)||elapsed<0)elapsed=0;
+  if(elapsed>86400)elapsed=86400;
   const today=todayKey();
   if(!S.focus.sessions)S.focus.sessions={};
   S.focus.sessions[today]=(S.focus.sessions[today]||0)+elapsed;
@@ -1175,8 +1179,8 @@ function renderUpcomingBanner(){
 // ─── 카테고리별 블록 ───
 function renderCategorySections(){
   const today=todayKey();
-  const todos=(S.todos||{})[today]||[];
-  const events=(S.events||{})[today]||[];
+  const todos=((S.todos||{})[today]||[]).filter(t=>t&&typeof t==='object'&&t.id&&typeof t.text==='string');
+  const events=((S.events||{})[today]||[]).filter(e=>e&&typeof e==='object'&&e.id&&typeof e.title==='string');
   const sec=document.getElementById('cat-section');
 
   // 모든 항목 하나의 리스트로 통합
@@ -1665,18 +1669,19 @@ window.toggleTask=(id)=>{
   const t=(S.todos[today]||[]).find(x=>x.id===id);
   if(!t)return;
   t.done=!t.done;
-  // 이월된 항목이면 원본도 같이 토글
+  // 이월된 항목이면 원본도 같이 동기화 (안전하게)
   if(t.carried&&t.carriedOriginId&&t.originDate){
-    const origArr=S.todos[t.originDate]||[];
-    const orig=origArr.find(x=>x.id===t.carriedOriginId);
-    if(orig){
-      orig.done=t.done;
-      // 완료되면 carried_out 유지, 미완료로 돌리면 carried_out도 해제
-      if(!t.done)orig.carried_out=false;
-    }
+    try{
+      const origArr=S.todos[t.originDate]||[];
+      const orig=origArr.find(x=>x.id===t.carriedOriginId);
+      if(orig){
+        orig.done=t.done;
+        if(!t.done)orig.carried_out=false;
+      }
+    }catch(e){console.warn('원본 동기화 실패:',e.message)}
   }
   save();renderCategorySections();renderStats();
-  if(t.done)toast(t.carried?'이월 항목 완료 ✓':'완료 ✓');
+  if(t.done)toast('완료 ✓');
 };
 
 window.toggleEvent=(id)=>{
@@ -1705,6 +1710,8 @@ window.delItem=(id,kind)=>{
   const arr=kind==='event'?(S.events[today]||[]):(S.todos[today]||[]);
   const it=arr.find(x=>x.id===id);
   if(!it)return;
+  // 매번 깨끗한 상태에서 시작 (이전 모달이 버튼을 갈아끼웠을 수 있음)
+  resetConfirmBtns();
   const hasRepeat=it.repeat||it.originId;
   document.getElementById('cf-emoji').textContent=hasRepeat?'↻':'🗑';
   document.getElementById('cf-title').textContent=hasRepeat?'반복 항목 삭제':'삭제 확인';
@@ -2241,8 +2248,27 @@ async function init(){
     if(ls)ls.classList.add('hide');
   }
 
+  let lastSeenDate=todayKey();
   setInterval(()=>{
     try{
+      const nowKey=todayKey();
+      // 자정 넘어 날짜 바뀌면 carryOver + 헤더 + 풀 렌더
+      if(nowKey!==lastSeenDate){
+        lastSeenDate=nowKey;
+        try{
+          const d=new Date();
+          document.getElementById('hdr-date').textContent=`${d.getFullYear()}.${z(d.getMonth()+1)}.${z(d.getDate())} ${DAYS[d.getDay()]}`;
+        }catch(_){}
+        try{
+          checkAutoArchive();
+          generateRecurring();
+          carryOverToToday();
+          save();
+        }catch(e){console.warn('자정 처리 실패:',e.message)}
+        renderAll();
+        checkNewDayPrompt();
+        return;
+      }
       if(document.getElementById('view-weekly').classList.contains('on'))renderWeekView();
       if(document.getElementById('view-today').classList.contains('on'))renderCategorySections();
       renderStats();
